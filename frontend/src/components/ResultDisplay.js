@@ -1,29 +1,30 @@
 // frontend/src/components/ResultDisplay.js
 
 import React from 'react';
+import { Typography, List, ListItem, ListItemText, Paper, Box } from '@mui/material';
 
 const ResultDisplay = ({ results }) => {
   if (!results || results.length === 0) {
-    return null; // Or display a message like "No results yet"
+    return null;
   }
 
   return (
-    <div>
-      <h2>Results:</h2>
-      {results.error ? (
-        <p>Error: {results.error}</p>
-      ) : (
-        <ul>
-          {results.map((result, index) => (
-            <li key={index}>
-              {result.word}: {result.distance.toFixed(4)}
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
+    <Paper elevation={3} sx={{ p: 3, mt: 4 }}>
+      <Typography variant="h5" gutterBottom>
+        Results:
+      </Typography>
+      <List>
+        {results.map((result, index) => (
+          <ListItem key={index}>
+            <ListItemText
+              primary={`${index + 1}. ${result.word}`}
+              secondary={`Distance: ${result.distance.toFixed(4)}`}
+            />
+          </ListItem>
+        ))}
+      </List>
+    </Paper>
   );
 };
-
 
 export default ResultDisplay;

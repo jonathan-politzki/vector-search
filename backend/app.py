@@ -1,12 +1,15 @@
-# backend/app.py
-
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from embedding_operations import perform_operation, find_most_similar_faiss, build_faiss_index, embeddings_dict
+from embedding_operations import (
+    perform_operation,
+    find_most_similar_faiss,
+    build_faiss_index,
+    embeddings_dict
+)
 import threading
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={r"/api/*": {"origins": "http://localhost:3000"}})
 
 # Lock for thread safety
 lock = threading.Lock()
@@ -35,7 +38,10 @@ def operate():
 
             similar_words = find_most_similar_faiss(result_vector, faiss_index, words)
             # Format results
-            formatted_results = [{'word': word, 'distance': float(distance)} for word, distance in similar_words]
+            formatted_results = [
+                {'word': word, 'distance': float(distance)}
+                for word, distance in similar_words
+            ]
             return jsonify(formatted_results)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
