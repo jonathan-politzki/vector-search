@@ -1,3 +1,5 @@
+// frontend/src/App.js
+
 import React, { useState } from 'react';
 import InputForm from './components/InputForm';
 import ResultDisplay from './components/ResultDisplay';
@@ -14,16 +16,24 @@ function App() {
         },
         body: JSON.stringify(data),
       });
-      const results = await response.json();
-      setResults(results);
+  
+      if (!response.ok) {
+        // Extract error message from response
+        const errorData = await response.json();
+        setResults({ error: errorData.error || 'An error occurred' });
+      } else {
+        const results = await response.json();
+        setResults(results);
+      }
     } catch (error) {
       console.error('Error:', error);
+      setResults({ error: 'An unexpected error occurred' });
     }
   };
 
   return (
     <div className="App">
-      <h1>Embedding Space Navigator</h1>
+      <h1>Vector Search</h1>
       <InputForm onSubmit={handleSubmit} />
       <ResultDisplay results={results} />
     </div>

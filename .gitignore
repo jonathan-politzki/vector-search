@@ -1,13 +1,22 @@
+# .gitignore
+
 # Python
 __pycache__/
 *.py[cod]
 *.so
+*.pyc
+
+# Virtual Environment
+venv/
+env/
+backend/venv/
+frontend/venv/
 
 # Flask
 instance/
 .webassets-cache
 
-# React
+# Node and React
 node_modules/
 build/
 
@@ -22,29 +31,5 @@ build/
 .DS_Store
 Thumbs.db
 
-
+# Model files
 backend/models/*.bin
-
-venv/
-
-backend/venv/
-frontend/venv/
-
-# Virtual Environment
-venv/
-env/
-*.pyc
-__pycache__/
-
-# Node
-node_modules/
-
-# React build
-build/
-
-# IDE files
-.vscode/
-.idea/
-
-# OS files
-.DS_Store
