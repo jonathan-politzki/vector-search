@@ -1,4 +1,5 @@
-# precompute_embeddings.py
+# backend/precompute_embeddings.py
+
 import json
 from openai import OpenAI
 import os

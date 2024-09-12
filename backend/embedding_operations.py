@@ -1,4 +1,5 @@
 # embedding_operations.py
+
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 import faiss

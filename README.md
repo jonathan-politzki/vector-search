@@ -25,7 +25,7 @@ This project allows users to explore word embeddings through a web interface.
 2. Start the frontend development server:
    - In the `frontend` directory, run: `npm start`
 
-3. Open your browser and navigate to `http://localhost:3000`
+3. Open your browser and navigate to `http://127.0.0.1:5000`
 
 ## Next Steps
 

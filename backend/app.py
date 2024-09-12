@@ -1,3 +1,5 @@
+# backend/app.py
+
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from embedding_operations import perform_operation, find_most_similar_faiss, build_faiss_index, embeddings_dict
