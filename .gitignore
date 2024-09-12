@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+
+# Flask
+instance/
+.webassets-cache
+
+# React
+node_modules/
+build/
+
+# Environment variables
+.env
+
+# Editors
+.vscode/
+.idea/
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+
+backend/models/*.bin
+
+venv/
+
+backend/venv/
+frontend/venv/
