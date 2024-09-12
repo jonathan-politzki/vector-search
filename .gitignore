@@ -29,3 +29,22 @@ venv/
 
 backend/venv/
 frontend/venv/
+
+# Virtual Environment
+venv/
+env/
+*.pyc
+__pycache__/
+
+# Node
+node_modules/
+
+# React build
+build/
+
+# IDE files
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
