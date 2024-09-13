@@ -43,6 +43,7 @@ def operate():
 
     try:
         with lock:
+            # Declare 'faiss_index' and 'words' as global before using them
             global faiss_index, words
 
             logger.info(f"Received operation with positive: {positive}, negative: {negative}")
@@ -68,6 +69,7 @@ def operate():
     except Exception as e:
         logger.error("Error in /api/operate", exc_info=True)
         return jsonify({'error': str(e)}), 500
+
 
 if __name__ == '__main__':
     app.run(debug=True)

@@ -16,7 +16,7 @@ openai.api_key = os.getenv('OPENAI_API_KEY')
 
 def get_embedding(text, model='text-embedding-3-small'):
     try:
-        response = openai.Embedding.create(input=text, model=model)
+        response = openai.embeddings.create(input=text, model=model)
         embedding = response['data'][0]['embedding']
         logger.info(f"Obtained embedding for '{text}'.")
         return embedding
