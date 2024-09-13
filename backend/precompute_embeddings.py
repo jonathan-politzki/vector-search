@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 load_dotenv()
 openai.api_key = os.getenv('OPENAI_API_KEY')
 
-def get_embedding(text, model='text-embedding-ada-002'):
+def get_embedding(text, model='text-embedding-3-small'):
     try:
         response = openai.Embedding.create(input=text, model=model)
         embedding = response['data'][0]['embedding']
@@ -43,6 +43,8 @@ def precompute_embeddings(vocabulary, output_file='embeddings.json'):
 if __name__ == '__main__':
     vocabulary = [
         'king', 'queen', 'man', 'woman', 'prince', 'princess',
-        'doctor', 'nurse', 'brother', 'sister', 'husband', 'wife'
+        'doctor', 'nurse', 'brother', 'sister', 'husband', 'wife',
+        'spacecraft', 'rocket', 'satellite', 'astronaut', 'galaxy',
+        'telescope', 'orbit', 'launch', 'module'  # Added spacecraft-related words
     ]  # Add more words as needed
     precompute_embeddings(vocabulary)

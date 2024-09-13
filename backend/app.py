@@ -10,11 +10,13 @@ from embedding_operations import (
 )
 import threading
 import logging
+import numpy as np
 
 app = Flask(__name__)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Enable CORS for all routes and origins
 CORS(app, resources={r"/*": {"origins": "*"}})
@@ -25,9 +27,9 @@ lock = threading.Lock()
 # Build Faiss index at startup
 try:
     faiss_index, words = build_faiss_index(embeddings_dict)
-    app.logger.info("FAISS index built successfully.")
+    logger.info("FAISS index built successfully.")
 except Exception as e:
-    app.logger.error("Failed to build FAISS index on startup.", exc_info=True)
+    logger.error("Failed to build FAISS index on startup.", exc_info=True)
     raise e
 
 @app.route('/api/operate', methods=['POST'])
@@ -41,29 +43,31 @@ def operate():
 
     try:
         with lock:
-            # Declare 'faiss_index' and 'words' as global before using them
             global faiss_index, words
 
-            app.logger.info(f"Received operation with positive: {positive}, negative: {negative}")
+            logger.info(f"Received operation with positive: {positive}, negative: {negative}")
             result_vector = perform_operation(positive, negative)
 
-            # Rebuild Faiss index if new words are added
+            # Identify new words that were added during perform_operation
             new_words = [word for word in embeddings_dict.keys() if word not in words]
             if new_words:
-                app.logger.info(f"New words detected: {new_words}. Rebuilding FAISS index.")
-                faiss_index, words = build_faiss_index(embeddings_dict)
+                logger.info(f"New words detected: {new_words}. Adding to FAISS index.")
+                for word in new_words:
+                    embedding = embeddings_dict[word].astype('float32')
+                    faiss_index.add(np.expand_dims(embedding, axis=0))
+                    words.append(word)
+                logger.info(f"Added {len(new_words)} new words to FAISS index.")
 
             similar_words = find_most_similar_faiss(result_vector, faiss_index, words)
             formatted_results = [
                 {'word': word, 'distance': float(distance)}
                 for word, distance in similar_words
             ]
-            app.logger.info(f"Operation successful. Returning results: {formatted_results}")
+            logger.info(f"Operation successful. Returning results: {formatted_results}")
             return jsonify(formatted_results)
     except Exception as e:
-        app.logger.error("Error in /api/operate", exc_info=True)
+        logger.error("Error in /api/operate", exc_info=True)
         return jsonify({'error': str(e)}), 500
-
 
 if __name__ == '__main__':
     app.run(debug=True)

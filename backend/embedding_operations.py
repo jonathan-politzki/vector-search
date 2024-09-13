@@ -31,7 +31,7 @@ except json.JSONDecodeError:
 # Convert lists to numpy arrays
 embeddings_dict = {word: np.array(embedding) for word, embedding in embeddings_dict.items()}
 
-def get_embedding(text, model='text-embedding-ada-002'):
+def get_embedding(text, model='text-embedding-3-small'):
     try:
         response = openai.Embedding.create(input=text, model=model)
         embedding = response['data'][0]['embedding']
