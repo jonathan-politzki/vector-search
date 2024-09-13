@@ -1,5 +1,3 @@
-// frontend/src/App.js
-
 import React, { useState } from 'react';
 import { Container, Typography, Box, Snackbar, Alert } from '@mui/material';
 import InputForm from './components/InputForm';
@@ -15,6 +13,7 @@ function App() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Accept': 'application/json',
         },
         body: JSON.stringify(data),
       });

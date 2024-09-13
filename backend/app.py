@@ -17,8 +17,14 @@ lock = threading.Lock()
 # Build Faiss index at startup
 faiss_index, words = build_faiss_index(embeddings_dict)
 
-@app.route('/api/operate', methods=['POST'])
+@app.route('/api/operate', methods=['POST', 'OPTIONS'])
 def operate():
+    if request.method == 'OPTIONS':
+        # Respond to preflight request
+        response = app.make_default_options_response()
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+        return response
+
     data = request.json
     positive = data.get('positive', [])
     negative = data.get('negative', [])
