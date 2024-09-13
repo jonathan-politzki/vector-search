@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 
 # Load API key
 load_dotenv()
-openai.api_key = os.getenv('OPENAI_API_KEY')
+client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
 
 # Load precomputed embeddings
 with open('embeddings.json', 'r') as f:
@@ -20,11 +20,11 @@ with open('embeddings.json', 'r') as f:
 embeddings_dict = {word: np.array(embedding) for word, embedding in embeddings_dict.items()}
 
 def get_embedding(text, model='text-embedding-ada-002'):
-    response = openai.Embedding.create(
+    response = client.embeddings.create(
         input=text,
         model=model
     )
-    embedding = response['data'][0]['embedding']
+    embedding = response.data[0].embedding
     return np.array(embedding)
 
 def perform_operation(positive_words, negative_words):

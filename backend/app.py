@@ -1,3 +1,5 @@
+# app.py
+
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from embedding_operations import (
@@ -9,7 +11,7 @@ from embedding_operations import (
 import threading
 
 app = Flask(__name__)
-CORS(app, resources={r"/api/*": {"origins": "http://localhost:3000"}})
+CORS(app, resources={r"/api/*": {"origins": "http://localhost:3000"}}, supports_credentials=True)
 
 # Lock for thread safety
 lock = threading.Lock()
@@ -17,14 +19,8 @@ lock = threading.Lock()
 # Build Faiss index at startup
 faiss_index, words = build_faiss_index(embeddings_dict)
 
-@app.route('/api/operate', methods=['POST', 'OPTIONS'])
+@app.route('/api/operate', methods=['POST'])
 def operate():
-    if request.method == 'OPTIONS':
-        # Respond to preflight request
-        response = app.make_default_options_response()
-        response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
-        return response
-
     data = request.json
     positive = data.get('positive', [])
     negative = data.get('negative', [])
