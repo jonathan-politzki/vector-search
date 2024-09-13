@@ -41,7 +41,9 @@ def operate():
             ]
             return jsonify(formatted_results)
     except Exception as e:
+        app.logger.error(f"Error in /api/operate: {e}")
         return jsonify({'error': str(e)}), 500
+
 
 if __name__ == '__main__':
     app.run(debug=True)

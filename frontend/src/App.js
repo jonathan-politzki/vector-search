@@ -11,7 +11,7 @@ function App() {
 
   const handleSubmit = async (data) => {
     try {
-      const response = await fetch('http://localhost:5000/api/operate', {
+      const response = await fetch(process.env.REACT_APP_API_URL + '/api/operate', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
