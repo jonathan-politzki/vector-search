@@ -1,7 +1,7 @@
 # backend/precompute_embeddings.py
 
 import json
-from openai import OpenAI
+import openai
 import os
 from dotenv import load_dotenv
 

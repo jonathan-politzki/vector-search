@@ -15,7 +15,8 @@ function App() {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
         },
-        credentials: 'include',
+        // Remove credentials if not needed
+        // credentials: 'include',
         body: JSON.stringify(data),
       });
 
