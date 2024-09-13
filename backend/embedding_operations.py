@@ -26,7 +26,7 @@ EMBEDDINGS_CACHE_FILE = 'embeddings_cache.json'
 
 def get_embedding(text, model='text-embedding-ada-002'):
     try:
-        response = openai.Embedding.create(input=text, model=model)  # Corrected method name
+        response = openai.Embeddings.create(input=[text], model=model)  # Corrected method name and input format
         embedding = response['data'][0]['embedding']  # Using dictionary-style access
         logger.info(f"Obtained embedding for '{text}'.")
         return embedding
