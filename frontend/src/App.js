@@ -1,3 +1,5 @@
+// frontend/src/App.js
+
 import React, { useState } from 'react';
 import { Container, Typography, Box, Snackbar, Alert } from '@mui/material';
 import InputForm from './components/InputForm';
@@ -15,8 +17,6 @@ function App() {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
         },
-        // Remove credentials if not needed
-        // credentials: 'include',
         body: JSON.stringify(data),
       });
 

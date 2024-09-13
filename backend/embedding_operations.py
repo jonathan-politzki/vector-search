@@ -1,3 +1,5 @@
+# backend/embedding_operations.py
+
 import numpy as np
 import faiss
 import openai
@@ -16,7 +18,7 @@ with open('embeddings.json', 'r') as f:
 # Convert lists to numpy arrays
 embeddings_dict = {word: np.array(embedding) for word, embedding in embeddings_dict.items()}
 
-def get_embedding(text, model='text-embedding-ada-002'):
+def get_embedding(text, model='text-embedding-3-small'):
     response = openai.Embedding.create(input=text, model=model)
     embedding = response['data'][0]['embedding']
     return np.array(embedding)
