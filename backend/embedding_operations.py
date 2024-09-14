@@ -2,10 +2,10 @@
 
 import numpy as np
 import faiss
-from openai import OpenAI
+import openai
+import logging
 from dotenv import load_dotenv
 import os
-import logging
 import threading
 
 # Configure logging
@@ -14,17 +14,22 @@ logger = logging.getLogger(__name__)
 
 # Load environment variables
 load_dotenv()
-
-# Initialize OpenAI client
-api_key = os.getenv('OPENAI_API_KEY')
-if not api_key:
-    raise ValueError("OPENAI_API_KEY environment variable is not set")
-client = OpenAI(api_key=api_key)
+openai.api_key = os.getenv('OPENAI_API_KEY')
 
 class EmbeddingManager:
     def __init__(self, model='text-embedding-3-small'):
         self.model = model
-        self.dimension = 1536 if 'ada' in model else 3072  # Adjust based on model
+        # Mapping model names to their dimensions
+        model_dimensions = {
+            'text-embedding-3-small': 1536,
+            'text-embedding-3-large': 3072,
+            'text-embedding-ada-002': 1536,  # For reference
+        }
+        self.dimension = model_dimensions.get(self.model)
+        if self.dimension is None:
+            logger.error(f"Unsupported model: {self.model}")
+            raise ValueError(f"Unsupported model: {self.model}")
+        
         self.faiss_index = faiss.IndexFlatL2(self.dimension)
         self.words = []
         self.embeddings_cache = {}
@@ -39,8 +44,10 @@ class EmbeddingManager:
 
         try:
             # Correct API call without instantiating OpenAI
-            response = client.embeddings.create(input=word,
-            model=self.model)
+            response = openai.Embedding.create(
+                input=word,
+                model=self.model
+            )
             # Access embedding using attribute notation
             embedding = response.data[0].embedding
             embedding = np.array(embedding).astype('float32')
@@ -113,8 +120,8 @@ class EmbeddingManager:
             logger.info(f"Found similar words: {similar}")
             return similar
 
-# Instantiate the EmbeddingManager
-embedding_manager = EmbeddingManager()
+# Instantiate the EmbeddingManager with the desired model
+embedding_manager = EmbeddingManager(model='text-embedding-3-small')  # Change to 'text-embedding-3-large' if needed
 
 def load_corpus_embeddings(corpus):
     """Load corpus embeddings into FAISS index."""

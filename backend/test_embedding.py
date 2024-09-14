@@ -1,7 +1,8 @@
 # test_embedding.py
-import os
-from openai import OpenAI
+
+import openai
 import numpy as np
+import os
 from dotenv import load_dotenv
 import logging
 
@@ -11,18 +12,15 @@ logger = logging.getLogger(__name__)
 
 # Load API key
 load_dotenv()
-
-# Create OpenAI client
-api_key = os.getenv('OPENAI_API_KEY')
-if not api_key:
-    raise ValueError("OPENAI_API_KEY environment variable is not set")
-client = OpenAI(api_key=api_key)
+openai.api_key = os.getenv('OPENAI_API_KEY')
 
 def get_embedding(text, model='text-embedding-3-small'):
     try:
         text = text.replace("\n", " ")
-        response = client.embeddings.create(input=text,
-        model=model)
+        response = openai.Embedding.create(
+            input=text,
+            model=model
+        )
         # Access embedding using attribute notation
         embedding = response.data[0].embedding
         logger.info(f"Obtained embedding for '{text}'.")
