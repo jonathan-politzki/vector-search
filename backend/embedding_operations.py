@@ -1,5 +1,3 @@
-# backend/embedding_operations.py
-
 import numpy as np
 import faiss
 from sentence_transformers import SentenceTransformer
@@ -16,57 +14,17 @@ logger = logging.getLogger(__name__)
 # Load environment variables (if any)
 load_dotenv()
 
-# Path to the embeddings JSON file
-EMBEDDINGS_FILE = 'embeddings.json'
+# Initialize the Hugging Face SentenceTransformer model
+model = SentenceTransformer('all-MiniLM-L6-v2')  # Replace this with the appropriate model
 
-# Load precomputed embeddings
-try:
-    with open(EMBEDDINGS_FILE, 'r') as f:
-        embeddings_dict = json.load(f)
-    logger.info("Loaded precomputed embeddings successfully.")
-except FileNotFoundError:
-    logger.warning(f"{EMBEDDINGS_FILE} not found. Starting with an empty embeddings dictionary.")
-    embeddings_dict = {}
-except json.JSONDecodeError:
-    logger.error(f"{EMBEDDINGS_FILE} is not a valid JSON file. Starting with an empty embeddings dictionary.")
-    embeddings_dict = {}
-
-# Convert lists to numpy arrays
-embeddings_dict = {word: np.array(embedding) for word, embedding in embeddings_dict.items()}
-
-# Initialize the sentence transformer model
-# You can choose a different model from Hugging Face's repository if needed
-model = SentenceTransformer('all-MiniLM-L6-v2')  # 384-dimensional embeddings
-
-# Determine embedding dimension
-if embeddings_dict:
-    embedding_dimension = len(next(iter(embeddings_dict.values())))
-else:
-    embedding_dimension = model.get_sentence_embedding_dimension()
-logger.info(f"Using embedding dimension: {embedding_dimension}")
-
-# Initialize FAISS index
-if embeddings_dict:
-    faiss_index = faiss.IndexFlatL2(embedding_dimension)
-    words = list(embeddings_dict.keys())
-    embeddings_matrix = np.array(list(embeddings_dict.values())).astype('float32')
-    faiss_index.add(embeddings_matrix)
-    logger.info(f"FAISS index built with {len(words)} vectors.")
-else:
-    faiss_index = faiss.IndexFlatL2(embedding_dimension)
-    words = []
-    logger.info("Initialized empty FAISS index.")
+# Initialize FAISS index and embedding dimension
+embedding_dimension = model.get_sentence_embedding_dimension()  # Automatically get dimension
+faiss_index = faiss.IndexFlatL2(embedding_dimension)
+words = []
+embeddings_dict = {}
 
 # Lock for thread safety
 lock = threading.Lock()
-
-def save_embeddings():
-    """Save the embeddings_dict to the JSON file."""
-    with open(EMBEDDINGS_FILE, 'w') as f:
-        # Convert numpy arrays to lists for JSON serialization
-        serializable_dict = {word: embedding.tolist() for word, embedding in embeddings_dict.items()}
-        json.dump(serializable_dict, f)
-    logger.info(f"Saved embeddings to {EMBEDDINGS_FILE}.")
 
 def get_embedding(word):
     """Fetch embedding using Hugging Face's sentence-transformers."""
@@ -75,9 +33,9 @@ def get_embedding(word):
         return embeddings_dict[word]
     
     try:
-        embedding = model.encode(word)
-        embedding = embedding.astype('float32')
-        embeddings_dict[word] = embedding
+        embedding = model.encode(word, convert_to_tensor=True).cpu().numpy()  # Convert to numpy array
+        embedding = embedding.astype('float32')  # Ensure FAISS compatibility
+        embeddings_dict[word] = embedding  # Cache the embedding
         logger.info(f"Obtained and cached embedding for '{word}'.")
         return embedding
     except Exception as e:
@@ -117,9 +75,6 @@ def perform_operation(positive_words, negative_words):
             result_vector = result_vector / norm
         logger.info("Computed and normalized result vector.")
         
-        # Save embeddings after operation
-        save_embeddings()
-        
         return result_vector
     else:
         logger.error("No valid embeddings found for the provided words.")
@@ -128,22 +83,29 @@ def perform_operation(positive_words, negative_words):
 def find_most_similar_faiss(result_vector, faiss_index, words, top_n=5):
     """Find top_n similar words using FAISS index."""
     logger.info("Finding most similar words using FAISS.")
-    if len(words) == 0:
-        logger.error("FAISS index is empty.")
-        return []
     
     result_vector = np.expand_dims(result_vector, axis=0).astype('float32')
+    
+    # Search for nearest neighbors in FAISS
     distances, indices = faiss_index.search(result_vector, top_n)
-    similar = [(words[i], float(distances[0][idx])) for idx, i in enumerate(indices[0])]
-    logger.info(f"Found similar words: {similar}")
-    return similar
+    
+    similar_words = [(words[i], float(distances[0][idx])) for idx, i in enumerate(indices[0])]
+    logger.info(f"Found similar words: {similar_words}")
+    return similar_words
+
+def add_word_to_faiss(word):
+    """Add a word to the FAISS index if it's not already there."""
+    if word not in words:
+        embedding = get_embedding(word)
+        if embedding is not None:
+            faiss_index.add(np.expand_dims(embedding, axis=0))  # Add embedding to FAISS
+            words.append(word)
+            logger.info(f"Added '{word}' to FAISS index.")
 
 def build_faiss_index(embeddings_dict):
     """Build FAISS index from the embeddings_dict."""
     logger.info("Building FAISS index.")
-    words = list(embeddings_dict.keys())
-    embeddings = np.array(list(embeddings_dict.values())).astype('float32')
-    index = faiss.IndexFlatL2(len(embeddings[0]))
-    index.add(embeddings)
+    for word in embeddings_dict:
+        add_word_to_faiss(word)
     logger.info(f"FAISS index built with {len(words)} vectors.")
-    return index, words
+    return faiss_index, words
