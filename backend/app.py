@@ -24,7 +24,7 @@ CORS(app, resources={r"/*": {"origins": "*"}})
 # Lock for thread safety
 lock = threading.Lock()
 
-# Build Faiss index at startup
+# Build FAISS index at startup
 try:
     faiss_index, words = build_faiss_index(embeddings_dict)
     logger.info("FAISS index built successfully.")
@@ -43,9 +43,6 @@ def operate():
 
     try:
         with lock:
-            # Declare 'faiss_index' and 'words' as global before using them
-            global faiss_index, words
-
             logger.info(f"Received operation with positive: {positive}, negative: {negative}")
             result_vector = perform_operation(positive, negative)
 
@@ -61,7 +58,7 @@ def operate():
 
             similar_words = find_most_similar_faiss(result_vector, faiss_index, words)
             formatted_results = [
-                {'word': word, 'distance': float(distance)}
+                {'word': word, 'distance': distance}
                 for word, distance in similar_words
             ]
             logger.info(f"Operation successful. Returning results: {formatted_results}")
@@ -70,6 +67,18 @@ def operate():
         logger.error("Error in /api/operate", exc_info=True)
         return jsonify({'error': str(e)}), 500
 
+@app.route('/health', methods=['GET'])
+def health_check():
+    try:
+        # Perform a simple operation to check if the system is working
+        test_vector = perform_operation(['test'], [])
+        if test_vector is not None:
+            return jsonify({'status': 'healthy'}), 200
+        else:
+            return jsonify({'status': 'unhealthy', 'reason': 'Failed to perform test operation'}), 500
+    except Exception as e:
+        logger.error(f"Health check failed: {e}", exc_info=True)
+        return jsonify({'status': 'unhealthy', 'reason': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True)
