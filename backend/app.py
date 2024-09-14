@@ -1,9 +1,6 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from embedding_operations import (
-    perform_operation,
-    find_most_similar_faiss
-)
+from embedding_operations import perform_operation, find_most_similar
 import threading
 import logging
 
@@ -33,7 +30,7 @@ def operate():
             logger.info(f"Received operation with positive: {positive}, negative: {negative}")
             result_vector = perform_operation(positive, negative)
 
-            similar_words = find_most_similar_faiss(result_vector, top_n=5)
+            similar_words = find_most_similar(result_vector, top_n=5)
             formatted_results = [
                 {'word': word, 'distance': distance}
                 for word, distance in similar_words

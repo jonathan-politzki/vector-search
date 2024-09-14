@@ -1,101 +1,77 @@
 import numpy as np
-import faiss
-from sentence_transformers import SentenceTransformer
+import requests
+from typing import List, Tuple
 import logging
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Initialize the SentenceTransformer model
-model = SentenceTransformer('all-MiniLM-L6-v2')  # 384-dimensional embeddings
+headers = {"Authorization": f"Bearer {API_TOKEN}"}
 
-# Initialize FAISS index with correct dimension
-embedding_dimension = model.get_sentence_embedding_dimension()
-faiss_index = faiss.IndexFlatL2(embedding_dimension)
-words = []  # Track words added to FAISS
-
-# Lock for thread safety
-lock = threading.Lock()
-
-def get_embedding(word):
-    """Fetch embedding using Hugging Face's sentence-transformers."""
+def get_embedding(text: str) -> np.ndarray:
+    """Fetch embedding using Hugging Face API."""
     try:
-        embedding = model.encode(word, convert_to_tensor=False)  # Returns a list
-        embedding = np.array(embedding).astype('float32')  # Ensure FAISS compatibility
+        response = requests.post(API_URL, headers=headers, json={"inputs": text})
+        response.raise_for_status()
+        embedding = np.array(response.json()[0])
         embedding /= np.linalg.norm(embedding)  # Normalize the embedding
-        logger.info(f"Obtained and normalized embedding for '{word}'.")
+        logger.info(f"Obtained and normalized embedding for '{text}'.")
         return embedding
     except Exception as e:
-        logger.error(f"Error getting embedding for '{word}': {str(e)}")
+        logger.error(f"Error getting embedding for '{text}': {str(e)}")
         return None
 
-def add_embedding_to_faiss(word, embedding):
-    """Add embedding to FAISS index and update words list."""
-    with lock:
-        if word not in words:
-            faiss_index.add(np.expand_dims(embedding, axis=0))
-            words.append(word)
-            logger.info(f"Added '{word}' to FAISS index.")
-        else:
-            logger.info(f"'{word}' is already in FAISS index.")
-
-def perform_operation(positive_words, negative_words):
+def perform_operation(positive_words: List[str], negative_words: List[str]) -> np.ndarray:
     """Compute result vector by adding positive embeddings and subtracting negative embeddings."""
     logger.info("Starting perform_operation.")
     positive_embeddings = []
     negative_embeddings = []
 
-    # Fetch embeddings for positive words
     for word in positive_words:
         embedding = get_embedding(word)
         if embedding is not None:
-            add_embedding_to_faiss(word, embedding)
             positive_embeddings.append(embedding)
         else:
             logger.warning(f"Skipping word '{word}' due to failed embedding retrieval.")
 
-    # Fetch embeddings for negative words
     for word in negative_words:
         embedding = get_embedding(word)
         if embedding is not None:
-            add_embedding_to_faiss(word, embedding)
             negative_embeddings.append(embedding)
         else:
             logger.warning(f"Skipping word '{word}' due to failed embedding retrieval.")
 
-    # Perform vector math
     if positive_embeddings or negative_embeddings:
-        positive_sum = np.sum(positive_embeddings, axis=0) if positive_embeddings else np.zeros(embedding_dimension, dtype='float32')
-        negative_sum = np.sum(negative_embeddings, axis=0) if negative_embeddings else np.zeros(embedding_dimension, dtype='float32')
+        positive_sum = np.sum(positive_embeddings, axis=0) if positive_embeddings else np.zeros(768)  # Assuming 768-dim embeddings
+        negative_sum = np.sum(negative_embeddings, axis=0) if negative_embeddings else np.zeros(768)
         result_vector = positive_sum - negative_sum
-        # Normalize the result vector
-        norm = np.linalg.norm(result_vector)
-        if norm != 0:
-            result_vector /= norm
+        result_vector /= np.linalg.norm(result_vector)  # Normalize the result vector
         logger.info("Computed and normalized result vector.")
         return result_vector
     else:
         logger.error("No valid embeddings found for the provided words.")
         raise ValueError("No valid embeddings found for the provided words.")
 
-def find_most_similar_faiss(result_vector, top_n=5):
-    """Find top_n similar words using FAISS index."""
-    logger.info("Finding most similar words using FAISS.")
-    if len(words) == 0:
-        logger.error("FAISS index is empty.")
+def find_most_similar(result_vector: np.ndarray, top_n: int = 5) -> List[Tuple[str, float]]:
+    """Find top_n similar words using Hugging Face API."""
+    logger.info("Finding most similar words using Hugging Face API.")
+    try:
+        response = requests.post(
+            API_URL,
+            headers=headers,
+            json={"inputs": {"source_sentence": result_vector.tolist(), "sentences": [""]}}
+        )
+        response.raise_for_status()
+        similar_words = response.json()
+        
+        # Process and format the results
+        formatted_results = []
+        for word, score in similar_words[:top_n]:
+            formatted_results.append((word, 1 - score))  # Convert similarity score to distance
+            logger.info(f"Word: {word}, Distance: {1 - score}")
+        
+        return formatted_results
+    except Exception as e:
+        logger.error(f"Error finding similar words: {str(e)}")
         return []
-    
-    result_vector = np.expand_dims(result_vector, axis=0).astype('float32')
-    distances, indices = faiss_index.search(result_vector, top_n)
-    
-    similar_words = []
-    for idx, distance in zip(indices[0], distances[0]):
-        if idx < len(words):
-            similar_words.append((words[idx], float(distance)))
-            logger.info(f"Word: {words[idx]}, Distance: {distance}")
-        else:
-            logger.warning(f"Index {idx} out of bounds for words list.")
-    
-    logger.info(f"Found similar words: {similar_words}")
-    return similar_words
