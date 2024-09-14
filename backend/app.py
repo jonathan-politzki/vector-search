@@ -37,9 +37,12 @@ def operate():
             ]
             logger.info(f"Operation successful. Returning results: {formatted_results}")
             return jsonify(formatted_results)
+    except ValueError as e:
+        logger.error(f"Error in /api/operate: {str(e)}")
+        return jsonify({'error': str(e)}), 400
     except Exception as e:
-        logger.error("Error in /api/operate", exc_info=True)
-        return jsonify({'error': str(e)}), 500
+        logger.error("Unexpected error in /api/operate", exc_info=True)
+        return jsonify({'error': 'An unexpected error occurred. Please try again later.'}), 500
 
 @app.route('/health', methods=['GET'])
 def health_check():
