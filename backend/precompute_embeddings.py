@@ -16,8 +16,10 @@ def get_embedding(word):
     """Fetch embedding using Hugging Face's sentence-transformers."""
     try:
         embedding = model.encode(word, convert_to_tensor=False)  # Returns a list
+        embedding = np.array(embedding).astype('float32')
+        embedding /= np.linalg.norm(embedding)  # Normalize the embedding
         logger.info(f"Obtained embedding for '{word}'.")
-        return embedding
+        return embedding.tolist()
     except Exception as e:
         logger.error(f"Error getting embedding for '{word}': {str(e)}")
         return None

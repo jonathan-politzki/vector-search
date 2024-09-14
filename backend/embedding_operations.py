@@ -34,8 +34,8 @@ except json.JSONDecodeError:
     logger.error(f"{EMBEDDINGS_FILE} is not a valid JSON file. Starting with an empty embeddings dictionary.")
     embeddings_dict = {}
 
-# Convert lists to numpy arrays
-embeddings_dict = {word: np.array(embedding).astype('float32') for word, embedding in embeddings_dict.items()}
+# Convert lists to numpy arrays and normalize
+embeddings_dict = {word: (np.array(embedding).astype('float32') / np.linalg.norm(embedding)) for word, embedding in embeddings_dict.items()}
 
 # Determine embedding dimension
 if embeddings_dict:
@@ -76,8 +76,11 @@ def get_embedding(word):
     try:
         embedding = model.encode(word, convert_to_tensor=False)  # Returns a list
         embedding = np.array(embedding).astype('float32')  # Ensure FAISS compatibility
+        norm = np.linalg.norm(embedding)
+        if norm != 0:
+            embedding /= norm  # Normalize the embedding
         embeddings_dict[word] = embedding  # Cache the embedding
-        logger.info(f"Obtained and cached embedding for '{word}'.")
+        logger.info(f"Obtained and cached embedding for '{word}'. Norm: {norm}")
         return embedding
     except Exception as e:
         logger.error(f"Error getting embedding for '{word}': {str(e)}")
@@ -113,7 +116,7 @@ def perform_operation(positive_words, negative_words):
         # Normalize the result vector
         norm = np.linalg.norm(result_vector)
         if norm != 0:
-            result_vector = result_vector / norm
+            result_vector /= norm
         logger.info("Computed and normalized result vector.")
         
         # Save embeddings after operation
