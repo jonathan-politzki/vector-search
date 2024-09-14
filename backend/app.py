@@ -56,7 +56,7 @@ def operate():
                     words.append(word)
                 logger.info(f"Added {len(new_words)} new words to FAISS index.")
 
-            similar_words = find_most_similar_faiss(result_vector, faiss_index, words)
+            similar_words = find_most_similar_faiss(result_vector, faiss_index, words, top_n=5)
             formatted_results = [
                 {'word': word, 'distance': distance}
                 for word, distance in similar_words

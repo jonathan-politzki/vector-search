@@ -1,28 +1,25 @@
 # backend/precompute_embeddings.py
 
 import json
-import openai
-import os
-from dotenv import load_dotenv
+from sentence_transformers import SentenceTransformer
+import numpy as np
 import logging
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Load API key
-load_dotenv()
-openai.api_key = os.getenv('OPENAI_API_KEY')
+# Initialize the SentenceTransformer model
+model = SentenceTransformer('all-MiniLM-L6-v2')  # 384-dimensional embeddings
 
-def get_embedding(text, model='text-embedding-3-small'):
+def get_embedding(word):
+    """Fetch embedding using Hugging Face's sentence-transformers."""
     try:
-        response = openai.embeddings.create(input=text, model=model)
-        # Access embedding using attributes
-        embedding = response.data[0].embedding
-        logger.info(f"Obtained embedding for '{text}'.")
+        embedding = model.encode(word, convert_to_tensor=False)  # Returns a list
+        logger.info(f"Obtained embedding for '{word}'.")
         return embedding
     except Exception as e:
-        logger.error(f"Error getting embedding for '{text}': {str(e)}")
+        logger.error(f"Error getting embedding for '{word}': {str(e)}")
         return None
 
 def precompute_embeddings(vocabulary, output_file='embeddings.json'):
