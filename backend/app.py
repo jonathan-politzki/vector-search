@@ -43,21 +43,24 @@ def operate():
             if result_vector is None:
                 return jsonify({'error': 'Failed to compute result vector'}), 500
 
-            similar_words = find_most_similar(result_vector, top_n=5)
-            
-            if not similar_words:
-                return jsonify({'error': 'Failed to find similar words'}), 500
-
+            # Format the result to match what the frontend expects
             formatted_results = [
-                {'word': word, 'distance': float(distance)}
-                for word, distance in similar_words
+                {
+                    'word': 'Result Vector',
+                    'distance': 0.0,
+                    'vector': result_vector.tolist()
+                }
             ]
-            logger.info(f"Operation successful. Returning results: {formatted_results}")
-            return jsonify(formatted_results)
+
+            result = {
+                'results': formatted_results,
+                'message': 'Operation successful. Note: Direct word similarity search is not supported for this model.'
+            }
+            logger.info("Operation successful. Returning result vector.")
+            return jsonify(result)
     except Exception as e:
         logger.error("Unexpected error in /api/operate", exc_info=True)
         return jsonify({'error': 'An unexpected error occurred. Please try again later.'}), 500
-
 
 @app.route('/health', methods=['GET'])
 def health_check():

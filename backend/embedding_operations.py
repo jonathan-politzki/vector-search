@@ -25,7 +25,13 @@ def get_embedding(text: str, max_retries: int = 3, retry_delay: float = 1.0) -> 
     """Fetch embedding using Hugging Face API with retries."""
     for attempt in range(max_retries):
         try:
-            response = requests.post(API_URL, headers=headers, json={"inputs": text}, timeout=10)
+            payload = {
+                "inputs": {
+                    "source_sentence": text,
+                    "sentences": [text]
+                }
+            }
+            response = requests.post(API_URL, headers=headers, json=payload, timeout=10)
             response.raise_for_status()
             embedding = np.array(response.json()[0])
             embedding /= np.linalg.norm(embedding)  # Normalize the embedding
@@ -88,31 +94,13 @@ def find_most_similar(result_vector: np.ndarray, top_n: int = 5) -> List[Tuple[s
     """Find top_n most similar words in the embedding space."""
     logger.info("Finding most similar words in the embedding space.")
     try:
-        # Use the Hugging Face API to find similar embeddings
-        response = requests.post(
-            API_URL,
-            headers=headers,
-            json={
-                "inputs": {
-                    "source_sentence": result_vector.tolist(),
-                    "sentences": [""] * top_n  # Empty strings to get top_n closest embeddings
-                },
-                "options": {"wait_for_model": True}
-            }
-        )
-        response.raise_for_status()
-        similar_embeddings = response.json()
-
-        # Process and format the results
-        formatted_results = []
-        for word, score in similar_embeddings:
-            distance = 1 - score  # Convert similarity score to distance
-            formatted_results.append((word, distance))
-            logger.info(f"Word: {word}, Distance: {distance:.4f}")
-
-        return formatted_results
+        # For sentence-transformers models, we can't directly find similar words.
+        # We would need a vocabulary to compare against, which we don't have.
+        # Instead, we'll return a placeholder message.
+        logger.warning("Direct word similarity search not supported for this model.")
+        return [("Similarity search not available", 0.0)] * top_n
     except Exception as e:
-        logger.error(f"Error finding similar words: {str(e)}")
+        logger.error(f"Error in find_most_similar: {str(e)}")
         return []
 
 if __name__ == "__main__":
@@ -122,7 +110,7 @@ if __name__ == "__main__":
     
     result = perform_operation(positive_words, negative_words)
     if result is not None:
-        similar_words = find_most_similar(result)
-        print("Similar words:", similar_words)
+        print("Result vector:", result)
+        print("Note: Direct word similarity search is not supported for this model.")
     else:
         print("Failed to perform operation.")
