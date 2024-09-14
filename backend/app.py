@@ -44,11 +44,11 @@ def operate():
             logger.info(f"Received operation with positive: {positive}, negative: {negative}")
             result_vector, word_embeddings = perform_operation(positive, negative)
             
+            if result_vector is None:
+                return jsonify({'error': 'Failed to compute result vector. Please try again later.'}), 500
+
             logger.info(f"Result vector shape: {result_vector.shape}, norm: {np.linalg.norm(result_vector)}")
             logger.info(f"Number of word embeddings: {len(word_embeddings)}")
-
-            if len(word_embeddings) == 0:
-                return jsonify({'error': 'No valid embeddings found for the provided words.'}), 400
 
             similar_words = find_most_similar(result_vector, word_embeddings)
             
@@ -73,7 +73,7 @@ def operate():
         logger.error(f"Unexpected error in /api/operate: {str(e)}")
         logger.error(traceback.format_exc())
         return jsonify({'error': 'An unexpected error occurred. Please try again later.'}), 500
-        
+            
 @app.route('/health', methods=['GET'])
 def health_check():
     try:
