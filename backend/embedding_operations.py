@@ -14,10 +14,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(level
 logger = logging.getLogger(__name__)
 
 API_TOKEN = os.getenv('API_TOKEN')
-API_URL = os.getenv('API_URL')
-
-if not API_URL:
-    raise ValueError("API_URL is not set in the .env file")
+API_URL = "https://api-inference.huggingface.co/models/sentence-transformers/all-mpnet-base-v2"
 
 if not API_TOKEN:
     raise ValueError("API_TOKEN is not set in the .env file")
@@ -75,40 +72,44 @@ def perform_operation(positive_words: List[str], negative_words: List[str]) -> O
     result_vector = positive_sum - negative_sum
     norm = np.linalg.norm(result_vector)
     
-    if norm == 0:
-        logger.error("Resulting vector has zero magnitude.")
-        return None
+    if norm < 1e-8:  # Use a small threshold instead of exactly zero
+        logger.warning("Resulting vector has very small magnitude. Using positive sum as fallback.")
+        result_vector = positive_sum
+        norm = np.linalg.norm(result_vector)
+        if norm < 1e-8:
+            logger.error("Fallback vector also has very small magnitude. Operation failed.")
+            return None
     
     result_vector /= norm  # Normalize the result vector
     logger.info("Computed and normalized result vector.")
     return result_vector
 
-def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
-    return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
-
 def find_most_similar(result_vector: np.ndarray, top_n: int = 5) -> List[Tuple[str, float]]:
-    """Find top_n similar words using cosine similarity with a predefined vocabulary."""
-    logger.info("Finding most similar words.")
+    """Find top_n most similar words in the embedding space."""
+    logger.info("Finding most similar words in the embedding space.")
     try:
-        vocabulary = ["king", "queen", "man", "woman", "prince", "princess", "ruler", "monarch", "royal", "crown"]
-        
-        similarities = []
-        for word in vocabulary:
-            word_embedding = get_embedding(word)
-            if word_embedding is not None:
-                similarity = cosine_similarity(result_vector, word_embedding)
-                similarities.append((word, similarity))
-        
-        # Sort by similarity (highest to lowest) and take top_n
-        similarities.sort(key=lambda x: x[1], reverse=True)
-        top_similar = similarities[:top_n]
-        
-        # Convert similarity to distance (1 - similarity)
-        formatted_results = [(word, 1 - score) for word, score in top_similar]
-        
-        for word, distance in formatted_results:
+        # Use the Hugging Face API to find similar embeddings
+        response = requests.post(
+            API_URL,
+            headers=headers,
+            json={
+                "inputs": {
+                    "source_sentence": result_vector.tolist(),
+                    "sentences": [""] * top_n  # Empty strings to get top_n closest embeddings
+                },
+                "options": {"wait_for_model": True}
+            }
+        )
+        response.raise_for_status()
+        similar_embeddings = response.json()
+
+        # Process and format the results
+        formatted_results = []
+        for word, score in similar_embeddings:
+            distance = 1 - score  # Convert similarity score to distance
+            formatted_results.append((word, distance))
             logger.info(f"Word: {word}, Distance: {distance:.4f}")
-        
+
         return formatted_results
     except Exception as e:
         logger.error(f"Error finding similar words: {str(e)}")
@@ -116,7 +117,10 @@ def find_most_similar(result_vector: np.ndarray, top_n: int = 5) -> List[Tuple[s
 
 if __name__ == "__main__":
     # Example usage
-    result = perform_operation(["king"], ["man"])
+    positive_words = ["king"]
+    negative_words = ["man"]
+    
+    result = perform_operation(positive_words, negative_words)
     if result is not None:
         similar_words = find_most_similar(result)
         print("Similar words:", similar_words)
