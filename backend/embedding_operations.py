@@ -1,8 +1,8 @@
-# backend/embedding_operations.py
+# embedding_operations.py
 
 import numpy as np
 import faiss
-import openai
+from openai import OpenAI
 import logging
 from dotenv import load_dotenv
 import os
@@ -14,7 +14,9 @@ logger = logging.getLogger(__name__)
 
 # Load environment variables
 load_dotenv()
-openai.api_key = os.getenv('OPENAI_API_KEY')
+
+# Initialize OpenAI client
+client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
 
 class EmbeddingManager:
     def __init__(self, model='text-embedding-3-small'):
@@ -43,14 +45,11 @@ class EmbeddingManager:
                 return self.embeddings_cache[word]
 
         try:
-            # Correct API call without instantiating OpenAI
-            response = openai.Embedding.create(
+            response = client.embeddings.create(
                 input=word,
                 model=self.model
             )
-            # Access embedding using attribute notation
-            embedding = response.data[0].embedding
-            embedding = np.array(embedding).astype('float32')
+            embedding = np.array(response.data[0].embedding).astype('float32')
             logger.info(f"Obtained embedding for '{word}'.")
             with self.lock:
                 self.embeddings_cache[word] = embedding
@@ -88,19 +87,19 @@ class EmbeddingManager:
         for word in positive_words:
             embedding = self.get_embedding(word)
             if embedding is not None:
-                self.add_embedding_to_index(word, embedding)
                 positive_embeddings.append(embedding)
 
         for word in negative_words:
             embedding = self.get_embedding(word)
             if embedding is not None:
-                self.add_embedding_to_index(word, embedding)
                 negative_embeddings.append(embedding)
 
         if positive_embeddings or negative_embeddings:
             positive_sum = np.sum(positive_embeddings, axis=0) if positive_embeddings else np.zeros(self.dimension)
             negative_sum = np.sum(negative_embeddings, axis=0) if negative_embeddings else np.zeros(self.dimension)
             result_vector = positive_sum - negative_sum
+            # Normalize the result vector
+            result_vector = result_vector / np.linalg.norm(result_vector)
             logger.info("Computed result vector.")
             return result_vector
         else:
@@ -110,18 +109,18 @@ class EmbeddingManager:
     def find_similar(self, result_vector, top_n=5):
         """Find top_n similar words using FAISS index."""
         with self.lock:
-            if len(self.words) == 0:
+            if self.faiss_index.ntotal == 0:
                 logger.error("FAISS index is empty.")
                 return []
 
             result_vector = np.array([result_vector]).astype('float32')
-            distances, indices = self.faiss_index.search(result_vector, top_n)
+            distances, indices = self.faiss_index.search(result_vector, min(top_n, self.faiss_index.ntotal))
             similar = [(self.words[i], float(distances[0][idx])) for idx, i in enumerate(indices[0])]
             logger.info(f"Found similar words: {similar}")
             return similar
 
 # Instantiate the EmbeddingManager with the desired model
-embedding_manager = EmbeddingManager(model='text-embedding-3-small')  # Change to 'text-embedding-3-large' if needed
+embedding_manager = EmbeddingManager(model='text-embedding-3-small')
 
 def load_corpus_embeddings(corpus):
     """Load corpus embeddings into FAISS index."""
