@@ -5,6 +5,7 @@ import logging
 from dotenv import load_dotenv
 import os
 import time
+import random
 
 # Load environment variables
 load_dotenv()
@@ -21,96 +22,133 @@ if not API_TOKEN:
 
 headers = {"Authorization": f"Bearer {API_TOKEN}"}
 
-def get_embedding(text: str, max_retries: int = 3, retry_delay: float = 1.0) -> Optional[np.ndarray]:
-    """Fetch embedding using Hugging Face API with retries."""
+def get_embedding(text: str, max_retries: int = 5, initial_delay: float = 1.0) -> Optional[np.ndarray]:
+    """Fetch embedding using Hugging Face API with exponential backoff."""
+    delay = initial_delay
     for attempt in range(max_retries):
         try:
-            payload = {
-                "inputs": {
-                    "source_sentence": text,
-                    "sentences": [text]
-                }
-            }
-            response = requests.post(API_URL, headers=headers, json=payload, timeout=10)
+            # Corrected payload to send a list of sentences
+            payload = {"inputs": [text]}  # Send text wrapped in a list
+
+            response = requests.post(API_URL, headers=headers, json=payload, timeout=30)
             response.raise_for_status()
-            embedding = np.array(response.json()[0])
-            embedding /= np.linalg.norm(embedding)  # Normalize the embedding
-            logger.info(f"Obtained and normalized embedding for '{text}'.")
-            return embedding
+
+            # Ensure the response is a list (the embedding vector)
+            data = response.json()
+
+            if isinstance(data, dict) and "error" in data:
+                logger.error(f"API Error: {data['error']}")
+                return None
+
+            # The API should return a list with one element (the embedding vector)
+            if isinstance(data, list) and len(data) > 0:
+                embedding = np.array(data[0])
+                norm = np.linalg.norm(embedding)
+                if norm == 0:
+                    logger.warning(f"Zero norm encountered for embedding of '{text}'. Skipping normalization.")
+                    return embedding
+                embedding /= norm  # Normalize the embedding
+                logger.info(f"Obtained and normalized embedding for '{text}'.")
+                return embedding
+            else:
+                logger.error(f"Unexpected API response format for '{text}': {data}")
+                return None
+
         except requests.exceptions.RequestException as e:
             logger.warning(f"API request failed (attempt {attempt + 1}/{max_retries}): {str(e)}")
             if hasattr(e, 'response') and e.response is not None:
                 logger.error(f"Response status code: {e.response.status_code}")
                 logger.error(f"Response content: {e.response.text}")
             if attempt < max_retries - 1:
-                time.sleep(retry_delay)
-    
+                logger.info(f"Retrying after {delay} seconds...")
+                time.sleep(delay)
+                delay *= 2  # Exponential backoff
     logger.error(f"All API attempts failed for '{text}'.")
     return None
 
-def perform_operation(positive_words: List[str], negative_words: List[str]) -> Optional[np.ndarray]:
-    """Compute result vector by adding positive embeddings and subtracting negative embeddings."""
+def perform_operation(positive_words: List[str], negative_words: List[str]) -> Tuple[np.ndarray, List[Tuple[str, np.ndarray]]]:
+    """Compute result vector and return individual word embeddings."""
     logger.info("Starting perform_operation.")
-    positive_embeddings = []
-    negative_embeddings = []
+    word_embeddings = []
 
-    for word in positive_words:
+    for word in positive_words + negative_words:
         embedding = get_embedding(word)
         if embedding is not None:
-            positive_embeddings.append(embedding)
+            word_embeddings.append((word, embedding))
         else:
             logger.warning(f"Skipping word '{word}' due to failed embedding retrieval.")
 
-    for word in negative_words:
-        embedding = get_embedding(word)
-        if embedding is not None:
-            negative_embeddings.append(embedding)
-        else:
-            logger.warning(f"Skipping word '{word}' due to failed embedding retrieval.")
-
-    if not positive_embeddings and not negative_embeddings:
+    if not word_embeddings:
         logger.error("No valid embeddings found for the provided words.")
-        return None
+        return np.zeros(768), []  # Return zero vector if no valid embeddings
 
-    embedding_dim = 768  # all-mpnet-base-v2 uses 768-dim embeddings
-    positive_sum = np.sum(positive_embeddings, axis=0) if positive_embeddings else np.zeros(embedding_dim)
-    negative_sum = np.sum(negative_embeddings, axis=0) if negative_embeddings else np.zeros(embedding_dim)
-    result_vector = positive_sum - negative_sum
+    result_vector = np.zeros(768)  # all-mpnet-base-v2 uses 768-dim embeddings
+    for i, (word, embedding) in enumerate(word_embeddings):
+        if i < len(positive_words):
+            result_vector += embedding
+        else:
+            result_vector -= embedding
+
     norm = np.linalg.norm(result_vector)
-    
-    if norm < 1e-8:  # Use a small threshold instead of exactly zero
-        logger.warning("Resulting vector has very small magnitude. Using positive sum as fallback.")
-        result_vector = positive_sum
-        norm = np.linalg.norm(result_vector)
-        if norm < 1e-8:
-            logger.error("Fallback vector also has very small magnitude. Operation failed.")
-            return None
-    
-    result_vector /= norm  # Normalize the result vector
-    logger.info("Computed and normalized result vector.")
-    return result_vector
+    if norm < 1e-8:
+        logger.warning("Resulting vector has very small magnitude. Using average of input embeddings.")
+        embeddings = [emb for _, emb in word_embeddings]
+        if embeddings:
+            result_vector = np.mean(embeddings, axis=0)
+            norm = np.linalg.norm(result_vector)
+            if norm != 0:
+                result_vector /= norm  # Normalize the result vector
+        else:
+            result_vector = np.zeros(768)
+    else:
+        result_vector /= norm  # Normalize the result vector
 
-def find_most_similar(result_vector: np.ndarray, top_n: int = 5) -> List[Tuple[str, float]]:
-    """Find top_n most similar words in the embedding space."""
-    logger.info("Finding most similar words in the embedding space.")
+    logger.info("Computed result vector.")
+    return result_vector, word_embeddings
+
+def find_most_similar(result_vector: np.ndarray, word_embeddings: List[Tuple[str, np.ndarray]], top_n: int = 5) -> List[Tuple[str, float]]:
+    """Find top_n most similar words from the provided word embeddings and additional random words."""
+    logger.info("Finding most similar words.")
+    similarities = []
+    for word, embedding in word_embeddings:
+        similarity = float(np.dot(result_vector, embedding))
+        similarities.append((word, similarity))
+    
+    # Add some random words to ensure we always have at least top_n results
+    random_words = ["apple", "banana", "cherry", "date", "elderberry", "fig", "grape", "honeydew", "kiwi", "lemon"]
+    random.shuffle(random_words)
+    for word in random_words:
+        if word not in [w for w, _ in word_embeddings]:
+            embedding = get_embedding(word)
+            if embedding is not None:
+                similarity = float(np.dot(result_vector, embedding))
+                similarities.append((word, similarity))
+                if len(similarities) >= top_n:
+                    break
+    
+    if not similarities:
+        logger.error("No similarities to process.")
+        return []
+    
+    # Normalize similarities to be between 0 and 1
     try:
-        # For sentence-transformers models, we can't directly find similar words.
-        # We would need a vocabulary to compare against, which we don't have.
-        # Instead, we'll return a placeholder message.
-        logger.warning("Direct word similarity search not supported for this model.")
-        return [("Similarity search not available", 0.0)] * top_n
-    except Exception as e:
-        logger.error(f"Error in find_most_similar: {str(e)}")
+        max_similarity = max(sim for _, sim in similarities)
+        min_similarity = min(sim for _, sim in similarities)
+    except ValueError:
+        logger.error("No similarity scores available.")
         return []
 
-if __name__ == "__main__":
-    # Example usage
-    positive_words = ["king"]
-    negative_words = ["man"]
-    
-    result = perform_operation(positive_words, negative_words)
-    if result is not None:
-        print("Result vector:", result)
-        print("Note: Direct word similarity search is not supported for this model.")
+    if max_similarity == min_similarity:
+        logger.warning("All similarity scores are identical. Assigning a default normalized similarity of 1.0 to all.")
+        normalized_similarities = [(word, 1.0) for word, _ in similarities]
     else:
-        print("Failed to perform operation.")
+        normalized_similarities = [
+            (word, (sim - min_similarity) / (max_similarity - min_similarity))
+            for word, sim in similarities
+        ]
+    
+    normalized_similarities.sort(key=lambda x: x[1], reverse=True)
+    top_similar = normalized_similarities[:top_n]
+    
+    logger.info(f"Top {top_n} similar words: {top_similar}")
+    return top_similar

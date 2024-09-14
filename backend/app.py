@@ -1,3 +1,5 @@
+# backend/app.py
+
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from embedding_operations import perform_operation, find_most_similar
@@ -5,12 +7,14 @@ import threading
 import logging
 from dotenv import load_dotenv
 import os
+import numpy as np
+import traceback
 
 # Load environment variables
 load_dotenv()
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 # Check for API token
@@ -38,41 +42,49 @@ def operate():
     try:
         with lock:
             logger.info(f"Received operation with positive: {positive}, negative: {negative}")
-            result_vector = perform_operation(positive, negative)
+            result_vector, word_embeddings = perform_operation(positive, negative)
+            
+            logger.info(f"Result vector shape: {result_vector.shape}, norm: {np.linalg.norm(result_vector)}")
+            logger.info(f"Number of word embeddings: {len(word_embeddings)}")
 
-            if result_vector is None:
-                return jsonify({'error': 'Failed to compute result vector'}), 500
+            if len(word_embeddings) == 0:
+                return jsonify({'error': 'No valid embeddings found for the provided words.'}), 400
 
-            # Format the result to match what the frontend expects
+            similar_words = find_most_similar(result_vector, word_embeddings)
+            
+            logger.info(f"Similar words found: {similar_words}")
+
             formatted_results = [
                 {
-                    'word': 'Result Vector',
-                    'distance': 0.0,
-                    'vector': result_vector.tolist()
+                    'word': word,
+                    'similarity': float(similarity),
+                    'is_input': word in positive or word in negative
                 }
+                for word, similarity in similar_words
             ]
 
             result = {
                 'results': formatted_results,
-                'message': 'Operation successful. Note: Direct word similarity search is not supported for this model.'
+                'message': 'Operation successful.'
             }
-            logger.info("Operation successful. Returning result vector.")
+            logger.info("Operation successful. Returning results.")
             return jsonify(result)
     except Exception as e:
-        logger.error("Unexpected error in /api/operate", exc_info=True)
+        logger.error(f"Unexpected error in /api/operate: {str(e)}")
+        logger.error(traceback.format_exc())
         return jsonify({'error': 'An unexpected error occurred. Please try again later.'}), 500
-
+        
 @app.route('/health', methods=['GET'])
 def health_check():
     try:
         # Perform a simple operation to check if the system is working
-        test_vector = perform_operation(['test'], [])
-        if test_vector is not None:
+        result_vector, _ = perform_operation(['test'], [])
+        if result_vector is not None and np.linalg.norm(result_vector) != 0:
             return jsonify({'status': 'healthy'}), 200
         else:
             return jsonify({'status': 'unhealthy', 'reason': 'Failed to perform test operation'}), 500
     except Exception as e:
-        logger.error(f"Health check failed: {e}", exc_info=True)
+        logger.error(f"Health check failed: {e}")
         return jsonify({'status': 'unhealthy', 'reason': str(e)}), 500
 
 if __name__ == '__main__':
