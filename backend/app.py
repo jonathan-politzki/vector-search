@@ -1,16 +1,11 @@
-# backend/app.py
-
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from embedding_operations import (
     perform_operation,
-    find_most_similar_faiss,
-    build_faiss_index,
-    embeddings_dict
+    find_most_similar_faiss
 )
 import threading
 import logging
-import numpy as np
 
 app = Flask(__name__)
 
@@ -23,14 +18,6 @@ CORS(app, resources={r"/*": {"origins": "*"}})
 
 # Lock for thread safety
 lock = threading.Lock()
-
-# Build FAISS index at startup
-try:
-    faiss_index, words = build_faiss_index(embeddings_dict)
-    logger.info("FAISS index built successfully.")
-except Exception as e:
-    logger.error("Failed to build FAISS index on startup.", exc_info=True)
-    raise e
 
 @app.route('/api/operate', methods=['POST'])
 def operate():
@@ -46,17 +33,7 @@ def operate():
             logger.info(f"Received operation with positive: {positive}, negative: {negative}")
             result_vector = perform_operation(positive, negative)
 
-            # Identify new words that were added during perform_operation
-            new_words = [word for word in embeddings_dict.keys() if word not in words]
-            if new_words:
-                logger.info(f"New words detected: {new_words}. Adding to FAISS index.")
-                for word in new_words:
-                    embedding = embeddings_dict[word].astype('float32')
-                    faiss_index.add(np.expand_dims(embedding, axis=0))
-                    words.append(word)
-                logger.info(f"Added {len(new_words)} new words to FAISS index.")
-
-            similar_words = find_most_similar_faiss(result_vector, faiss_index, words, top_n=5)
+            similar_words = find_most_similar_faiss(result_vector, top_n=5)
             formatted_results = [
                 {'word': word, 'distance': distance}
                 for word, distance in similar_words
